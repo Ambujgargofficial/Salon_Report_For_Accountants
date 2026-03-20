@@ -1,0 +1,969 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Branch Management Dashboard</title>
+    
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    
+    <!-- React & ReactDOM -->
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    
+    <!-- Babel for in-browser JSX transpilation -->
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+
+    <style>
+        /* Hide scrollbar utility */
+        .scrollbar-hide::-webkit-scrollbar {
+            display: none;
+        }
+        .scrollbar-hide {
+            -ms-overflow-style: none;
+            scrollbar-width: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-50">
+    <div id="root"></div>
+
+    <script type="text/babel">
+        const { useState, useEffect, useMemo, Component } = React;
+
+        // --- MOCK LUCIDE ICONS (To make it work without importing external libraries) ---
+        const AlertCircle = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg>;
+        const Loader2 = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M21 12a9 9 0 1 1-6.219-8.56"/></svg>;
+        const RefreshCw = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/></svg>;
+        const Calendar = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="3" y="4" width="18" height="18" rx="2" ry="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>;
+        const IndianRupee = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><path d="M6 3h12"/><path d="M6 8h12"/><path d="m6 13 8.5 8"/><path d="M6 13h3c2.24 0 4-1.76 4-4s-1.76-4-4-4H6"/></svg>;
+        const CreditCard = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="1" y="4" width="22" height="16" rx="2" ry="2"/><line x1="1" y1="10" x2="23" y2="10"/></svg>;
+        const Smartphone = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>;
+        const Calculator = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><rect x="4" y="2" width="16" height="20" rx="2" ry="2"/><line x1="8" y1="6" x2="16" y2="6"/><line x1="16" y1="14" x2="16" y2="18"/><path d="M16 10h.01"/><path d="M12 10h.01"/><path d="M8 10h.01"/><path d="M12 14h.01"/><path d="M8 14h.01"/><path d="M12 18h.01"/><path d="M8 18h.01"/></svg>;
+        const X = ({ className }) => <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>;
+        // -----------------------------------------------------------------------------
+
+        // Anti-Crash Safety Net (Prevents White Screens)
+        class ErrorBoundary extends Component {
+          constructor(props) {
+            super(props);
+            this.state = { hasError: false, errorInfo: null };
+          }
+          static getDerivedStateFromError(error) {
+            return { hasError: true, errorInfo: error };
+          }
+          render() {
+            if (this.state.hasError) {
+              return (
+                <div className="min-h-screen bg-gray-50 flex items-center justify-center p-6">
+                  <div className="bg-red-50 p-6 rounded-2xl border border-red-200 max-w-2xl w-full">
+                    <AlertCircle className="w-10 h-10 text-red-500 mb-4" />
+                    <h2 className="text-xl font-bold text-red-900 mb-2">Oops! Kuch galat ho gaya.</h2>
+                    <p className="text-red-700 mb-4">Ek data issue ke karan rendering error aayi. App ne white screen aane se bacha liya.</p>
+                    <div className="bg-white p-4 rounded-lg overflow-auto text-xs font-mono text-red-800 border border-red-100">
+                      {this.state.errorInfo?.toString()}
+                    </div>
+                    <button 
+                      onClick={() => window.location.reload()} 
+                      className="mt-6 bg-red-600 text-white px-6 py-2 rounded-lg hover:bg-red-700 font-medium"
+                    >
+                      Dashboard Reload Karein
+                    </button>
+                  </div>
+                </div>
+              );
+            }
+            return this.props.children;
+          }
+        }
+
+        function DashboardApp() {
+          const [data, setData] = useState([]);
+          const [baseBalances, setBaseBalances] = useState({}); 
+          
+          const [loading, setLoading] = useState(true);
+          const [error, setError] = useState(null);
+          
+          // App states
+          const [activeTab, setActiveTab] = useState('sales'); 
+          const [startDate, setStartDate] = useState('');
+          const [endDate, setEndDate] = useState('');
+          const [selectedLocation, setSelectedLocation] = useState('All');
+          const [locations, setLocations] = useState([]);
+          
+          // Drill-down Modal State
+          const [selectedExpenseForDetail, setSelectedExpenseForDetail] = useState(null);
+
+          const SHEET_ID = '1h2cUl1WB6E9ErvXuaFGkBgiaDZ6CqwC7NArnYHrhmGA';
+          const DATA_SHEET = 'Data';
+          const CASH_FLOW_SHEET = 'Cash Flow';
+
+          // The permanent baseline date set to 1 November 2025
+          const BASE_DATE = new Date(2025, 10, 1).getTime(); 
+
+          const fetchData = async () => {
+            setLoading(true);
+            setError(null);
+
+            try {
+              const cacheBuster = new Date().getTime();
+              const DATA_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${DATA_SHEET}&t=${cacheBuster}`;
+              const CASH_FLOW_URL = `https://docs.google.com/spreadsheets/d/${SHEET_ID}/gviz/tq?tqx=out:json&sheet=${CASH_FLOW_SHEET}&t=${cacheBuster}`;
+              
+              const [dataResponse, cashFlowResponse] = await Promise.all([
+                  fetch(DATA_URL),
+                  fetch(CASH_FLOW_URL)
+              ]);
+
+              const dataText = await dataResponse.text();
+              const cfText = await cashFlowResponse.text();
+              
+              const dataJson = JSON.parse(dataText.substring(dataText.indexOf('{'), dataText.lastIndexOf('}') + 1));
+              const cfJson = JSON.parse(cfText.substring(cfText.indexOf('{'), cfText.lastIndexOf('}') + 1));
+
+              if (!dataJson?.table?.rows) {
+                throw new Error("Main 'Data' sheet padhi nahi ja saki. Kripya check karein ki data valid hai.");
+              }
+
+              // ==========================================
+              // 1. Ultra-Safe Parse for 'Cash Flow' Sheet
+              // ==========================================
+              const parsedBalances = {};
+              if (cfJson?.table?.rows && cfJson.table.rows.length > 0) {
+                  let cfHeaders = cfJson.table.cols?.map(c => c?.label?.trim().toLowerCase() || '') || [];
+                  let cfStart = 0;
+                  
+                  if (cfHeaders.every(h => h === '')) {
+                      if (cfJson.table.rows[0]?.c) {
+                          cfHeaders = cfJson.table.rows[0].c.map(c => String(c?.v || c?.f || '').trim().toLowerCase());
+                          cfStart = 1;
+                      }
+                  }
+                  
+                  const getCfIdx = (keywords) => {
+                      let idx = cfHeaders.findIndex(h => keywords.includes(h));
+                      if (idx !== -1) return idx;
+                      return cfHeaders.findIndex(h => keywords.some(kw => h.includes(kw)));
+                  };
+
+                  // Bulletproof Fallbacks to Column 0 and 1 if headers are weird
+                  let idxCfLoc = getCfIdx(['username', 'location']);
+                  if (idxCfLoc === -1) idxCfLoc = 0; 
+                  
+                  let idxCfBal = getCfIdx(['op. bal', 'balance', 'amount', 'nov']);
+                  if (idxCfBal === -1) idxCfBal = 1; 
+
+                  for (let i = cfStart; i < cfJson.table.rows.length; i++) {
+                      const row = cfJson.table.rows[i];
+                      if (!row || !row.c) continue;
+
+                      const cellLoc = row.c[idxCfLoc];
+                      const cellBal = row.c[idxCfBal];
+
+                      let locName = cellLoc ? String(cellLoc.v || cellLoc.f || '').trim() : '';
+                      let balAmount = 0;
+                      
+                      if (cellBal) {
+                          let val = cellBal.v !== null && cellBal.v !== undefined ? cellBal.v : cellBal.f;
+                          if (typeof val === 'number') {
+                              balAmount = val;
+                          } else if (val) {
+                              // Ultra-strict cleaner (removes ₹, commas, text)
+                              const cleanStr = String(val).replace(/,/g, '').replace(/[^\d.-]/g, '');
+                              balAmount = parseFloat(cleanStr) || 0;
+                          }
+                      }
+
+                      if (locName) {
+                          parsedBalances[locName] = balAmount;
+                      }
+                  }
+              }
+              setBaseBalances(parsedBalances);
+
+
+              // ==========================================
+              // 2. Ultra-Safe Parse for 'Data' Sheet
+              // ==========================================
+              let headers = dataJson.table.cols?.map(c => c?.label?.trim().toLowerCase() || '') || [];
+              let startIndex = 0;
+              
+              if (headers.every(h => h === '')) {
+                  if (dataJson.table.rows[0]?.c) {
+                      headers = dataJson.table.rows[0].c.map(c => String(c?.v || c?.f || '').trim().toLowerCase());
+                      startIndex = 1;
+                  }
+              }
+
+              const getIdx = (keywords) => {
+                  let idx = headers.findIndex(h => keywords.includes(h));
+                  if (idx !== -1) return idx;
+                  return headers.findIndex(h => keywords.some(kw => h.includes(kw)));
+              };
+              
+              const idxDate = getIdx(['date']);
+              const idxCash = getIdx(['cash']);
+              const idxCard = getIdx(['card']);
+              const idxPaytm = getIdx(['paytm']);
+              const idxUpi = getIdx(['barcode-upi', 'barcode', 'upi']);
+              const idxTotal = getIdx(['total amout paid', 'total amount paid', 'total amout', 'total amount']); 
+              const idxLocation = getIdx(['saloon location', 'location', 'saloon']);
+              const idxExpHead = getIdx(['expense head']);
+              const idxRemarks = getIdx(['remarks', 'subhead', 'sub head']); 
+              const idxExpAmt = getIdx(['expense amount', 'exp amt']);
+
+              const parsedData = [];
+              const extractedLocations = new Set(Object.keys(parsedBalances)); 
+
+              for (let i = startIndex; i < dataJson.table.rows.length; i++) {
+                  const row = dataJson.table.rows[i];
+                  if (!row || !row.c) continue;
+
+                  const getNum = (index) => {
+                      if (index === -1 || !row.c[index]) return 0;
+                      const cell = row.c[index];
+                      if (cell.v !== null && cell.v !== undefined) {
+                          if (typeof cell.v === 'number') return cell.v;
+                          return parseFloat(String(cell.v).replace(/,/g, '').trim()) || 0;
+                      }
+                      if (cell.f) return parseFloat(String(cell.f).replace(/,/g, '').trim()) || 0;
+                      return 0;
+                  };
+
+                  let loc = 'Unknown';
+                  if (idxLocation !== -1 && row.c[idxLocation]) {
+                      const cell = row.c[idxLocation];
+                      if (cell.v !== null && cell.v !== undefined) loc = String(cell.v).trim();
+                      else if (cell.f) loc = String(cell.f).trim();
+                  }
+                  if (loc && loc !== 'Unknown') {
+                      extractedLocations.add(loc);
+                  }
+
+                  let timestamp = 0;
+                  let displayDate = ''; 
+                  if (idxDate !== -1 && row.c[idxDate]) {
+                      const cell = row.c[idxDate];
+                      displayDate = cell.f || (cell.v ? String(cell.v) : '');
+
+                      if (cell.v && typeof cell.v === 'string' && cell.v.startsWith('Date(')) {
+                          const match = cell.v.match(/Date\((\d+),\s*(\d+),\s*(\d+)/);
+                          if (match) {
+                              const d = new Date(parseInt(match[1]), parseInt(match[2]), parseInt(match[3]));
+                              timestamp = d.getTime();
+                              if(!cell.f) displayDate = d.toLocaleDateString('en-IN');
+                          }
+                      } else if (displayDate) {
+                          const datePart = displayDate.trim().split(/\s+/)[0];
+                          const parts = datePart.split(/[\/\-]/);
+                          if (parts.length === 3) {
+                              if (parts[2].length === 4) { 
+                                  let m = parseInt(parts[1]); let d = parseInt(parts[0]);
+                                  if (m > 12) { const temp = m; m = d; d = temp; } 
+                                  timestamp = new Date(parseInt(parts[2]), m - 1, d).getTime();
+                              } else if (parts[0].length === 4) { 
+                                  timestamp = new Date(parseInt(parts[0]), parseInt(parts[1]) - 1, parseInt(parts[2])).getTime();
+                              } else timestamp = new Date(datePart).getTime() || 0;
+                          } else timestamp = new Date(datePart).getTime() || 0;
+                      }
+                  }
+
+                  parsedData.push({
+                      timestamp, 
+                      displayDate, 
+                      cash: getNum(idxCash), 
+                      card: getNum(idxCard), 
+                      paytm: getNum(idxPaytm),
+                      upi: getNum(idxUpi), 
+                      totalPaid: getNum(idxTotal), 
+                      location: loc,
+                      expenseHead: row.c[idxExpHead] ? String(row.c[idxExpHead].v || row.c[idxExpHead].f || '').trim() : '',
+                      remarks: row.c[idxRemarks] ? String(row.c[idxRemarks].v || row.c[idxRemarks].f || '').trim() : '', 
+                      expenseAmount: getNum(idxExpAmt)
+                  });
+              }
+
+              setLocations(Array.from(extractedLocations).sort());
+              setData(parsedData);
+            } catch (err) {
+              console.error("Fetch Error:", err);
+              setError("Sync fail ho gaya. Check karein ki Google Sheets publicly accessible hain.");
+            } finally {
+              setLoading(false);
+            }
+          };
+
+          useEffect(() => {
+            fetchData();
+          }, []);
+
+          const { startTimestamp, endTimestamp } = useMemo(() => {
+            const parseLocalTime = (dateStr, isEnd) => {
+                if (!dateStr) return isEnd ? Infinity : 0;
+                const [y, m, d] = dateStr.split('-');
+                if (isEnd) return new Date(y, m - 1, d, 23, 59, 59, 999).getTime();
+                return new Date(y, m - 1, d, 0, 0, 0, 0).getTime();
+            };
+            return {
+                startTimestamp: parseLocalTime(startDate, false),
+                endTimestamp: parseLocalTime(endDate, true)
+            };
+          }, [startDate, endDate]);
+
+          const filteredData = useMemo(() => {
+            return data.filter(row => {
+                if (selectedLocation !== 'All' && row.location !== selectedLocation) return false;
+                if (row.timestamp < startTimestamp || row.timestamp > endTimestamp) return false;
+                return true;
+            });
+          }, [data, startTimestamp, endTimestamp, selectedLocation]);
+
+          const salesTotals = useMemo(() => {
+            let cash = 0, card = 0, paytm = 0, upi = 0, totalPaid = 0;
+            for (let i = 0; i < filteredData.length; i++) {
+                const row = filteredData[i];
+                cash += row.cash; card += row.card; paytm += row.paytm; upi += row.upi; totalPaid += row.totalPaid;
+            }
+            return { cash, card, paytm, upi, totalPaid };
+          }, [filteredData]);
+
+          const expenseData = useMemo(() => {
+            const summary = {};
+            let grandTotal = 0;
+
+            for (let i = 0; i < filteredData.length; i++) {
+                const row = filteredData[i];
+                if (row.expenseAmount > 0) {
+                    const head = row.expenseHead || 'Uncategorized / Other';
+                    if (!summary[head]) summary[head] = { amount: 0, details: [] };
+                    summary[head].amount += row.expenseAmount;
+                    summary[head].details.push(row); 
+                    grandTotal += row.expenseAmount;
+                }
+            }
+            const sortedSummary = Object.entries(summary).sort((a, b) => b[1].amount - a[1].amount);
+            return { summary: sortedSummary, grandTotal };
+          }, [filteredData]);
+
+          // ADVANCED CASH REPORT LOGIC
+          const cashReportData = useMemo(() => {
+            let baseOpeningCash = 0;
+            if (selectedLocation === 'All') {
+                baseOpeningCash = Object.values(baseBalances).reduce((sum, val) => sum + (Number(val) || 0), 0);
+            } else {
+                baseOpeningCash = Number(baseBalances[selectedLocation]) || 0;
+            }
+
+            let dynamicOpeningBalance = baseOpeningCash;
+            const dailyDataMap = {};
+
+            data.forEach(row => {
+                if (selectedLocation !== 'All' && row.location !== selectedLocation) return;
+                if (row.timestamp < BASE_DATE) return; 
+
+                const dateObj = new Date(row.timestamp);
+                const dateKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}-${String(dateObj.getDate()).padStart(2, '0')}`;
+                
+                if (row.timestamp >= BASE_DATE && row.timestamp < startTimestamp) {
+                    dynamicOpeningBalance += (Number(row.cash) || 0) - (Number(row.expenseAmount) || 0);
+                } 
+                else if (row.timestamp >= Math.max(BASE_DATE, startTimestamp) && row.timestamp <= endTimestamp) {
+                    if (!dailyDataMap[dateKey]) {
+                        dailyDataMap[dateKey] = {
+                            displayDate: dateObj.toLocaleDateString('en-IN', { day: '2-digit', month: 'short', year: 'numeric' }),
+                            cashIn: 0,
+                            cashOut: 0,
+                            timestamp: new Date(dateObj.getFullYear(), dateObj.getMonth(), dateObj.getDate()).getTime()
+                        };
+                    }
+                    dailyDataMap[dateKey].cashIn += (Number(row.cash) || 0);
+                    dailyDataMap[dateKey].cashOut += (Number(row.expenseAmount) || 0);
+                }
+            });
+
+            const sortedDays = Object.values(dailyDataMap).sort((a, b) => a.timestamp - b.timestamp);
+
+            let currentOpening = dynamicOpeningBalance;
+            const finalReport = sortedDays.map(day => {
+                const closing = currentOpening + day.cashIn - day.cashOut;
+                const record = { ...day, opening: currentOpening, closing: closing };
+                currentOpening = closing; 
+                return record;
+            });
+
+            return {
+                baseDateBalance: baseOpeningCash, 
+                calculatedOpeningBalance: dynamicOpeningBalance, 
+                dailyRecords: finalReport,
+                finalClosingBalance: currentOpening
+            };
+          }, [data, baseBalances, startTimestamp, endTimestamp, selectedLocation]);
+
+          // MONTHLY REPORT LOGIC (Date filter is ignored now)
+          const monthlyReportData = useMemo(() => {
+            const monthlyMap = {};
+
+            // We use raw 'data' instead of 'filteredData' to ignore date filters
+            data.forEach(row => {
+                // Still respect Location filter
+                if (selectedLocation !== 'All' && row.location !== selectedLocation) return;
+
+                if (!row.timestamp) return;
+
+                const dateObj = new Date(row.timestamp);
+                // Display as e.g. "April 2025"
+                const displayMonth = dateObj.toLocaleDateString('en-IN', { month: 'long', year: 'numeric' });
+                // Key for sorting chronologically e.g. "2025-04"
+                const sortKey = `${dateObj.getFullYear()}-${String(dateObj.getMonth() + 1).padStart(2, '0')}`;
+
+                if (!monthlyMap[sortKey]) {
+                    monthlyMap[sortKey] = {
+                        displayMonth: displayMonth,
+                        sortKey: sortKey,
+                        cash: 0,
+                        card: 0,
+                        paytm: 0,
+                        upi: 0,
+                        totalSales: 0,
+                        totalExpense: 0
+                    };
+                }
+
+                monthlyMap[sortKey].cash += (Number(row.cash) || 0);
+                monthlyMap[sortKey].card += (Number(row.card) || 0);
+                monthlyMap[sortKey].paytm += (Number(row.paytm) || 0);
+                monthlyMap[sortKey].upi += (Number(row.upi) || 0);
+                monthlyMap[sortKey].totalSales += (Number(row.totalPaid) || 0);
+                monthlyMap[sortKey].totalExpense += (Number(row.expenseAmount) || 0);
+            });
+
+            // Sort chronologically ascending
+            return Object.values(monthlyMap).sort((a, b) => a.sortKey.localeCompare(b.sortKey));
+          }, [data, selectedLocation]);
+
+
+          // Robust formatter prevents NaN crashes
+          const formatCurrency = (amount) => {
+            return new Intl.NumberFormat('en-IN', {
+              style: 'currency',
+              currency: 'INR',
+              minimumFractionDigits: 2,
+              maximumFractionDigits: 2
+            }).format(Number(amount) || 0); 
+          };
+
+          return (
+            <div className="min-h-screen bg-gray-50 text-gray-800 p-4 md:p-8 font-sans">
+              <div className="max-w-6xl mx-auto space-y-6">
+                
+                {/* Header Section */}
+                <div className="flex flex-col md:flex-row justify-between items-start md:items-center bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                  <div>
+                    <h1 className="text-2xl font-bold text-gray-900">Branch Management Dashboard</h1>
+                    <p className="text-sm text-gray-500 mt-1">
+                      Analyzing {data.length.toLocaleString()} rows of data
+                    </p>
+                  </div>
+                  
+                  <button 
+                    onClick={fetchData}
+                    disabled={loading}
+                    className="mt-4 md:mt-0 flex items-center gap-2 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-lg font-medium transition-colors disabled:opacity-50"
+                  >
+                    {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+                    Refresh Data
+                  </button>
+                </div>
+
+                {/* Error Message */}
+                {error && (
+                  <div className="bg-red-50 border-l-4 border-red-500 p-4 rounded-xl flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-red-500 mt-0.5 shrink-0" />
+                    <div>
+                      <h3 className="text-red-800 font-medium">Data Loading Error</h3>
+                      <p className="text-red-600 text-sm mt-1">{error}</p>
+                    </div>
+                  </div>
+                )}
+
+                {/* Filters */}
+                <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100">
+                  <div className="flex justify-between items-center mb-4">
+                    <h2 className="text-lg font-semibold text-gray-800 flex items-center gap-2">
+                      <Calendar className="w-5 h-5 text-blue-500" />
+                      Master Filters
+                    </h2>
+                    {(startDate || endDate || selectedLocation !== 'All') && (
+                      <button 
+                        onClick={() => { setStartDate(''); setEndDate(''); setSelectedLocation('All'); }}
+                        className="text-sm text-blue-600 hover:text-blue-800 font-medium transition-colors"
+                      >
+                        Clear Filters
+                      </button>
+                    )}
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div className="flex flex-col space-y-2">
+                      <label className="text-sm font-medium text-gray-600">Start Date</label>
+                      <input 
+                        type="date" 
+                        value={startDate}
+                        onChange={(e) => setStartDate(e.target.value)}
+                        className="border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all w-full"
+                      />
+                    </div>
+                    
+                    <div className="flex flex-col space-y-2">
+                      <label className="text-sm font-medium text-gray-600">End Date</label>
+                      <input 
+                        type="date" 
+                        value={endDate}
+                        onChange={(e) => setEndDate(e.target.value)}
+                        className="border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all w-full"
+                      />
+                    </div>
+
+                    <div className="flex flex-col space-y-2">
+                      <label className="text-sm font-medium text-gray-600 flex items-center gap-1">
+                        📍 Saloon Location
+                      </label>
+                      <select
+                        value={selectedLocation}
+                        onChange={(e) => setSelectedLocation(e.target.value)}
+                        className="border border-gray-300 rounded-lg px-4 py-2.5 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all w-full bg-white text-gray-800"
+                      >
+                        <option value="All">All Locations</option>
+                        {locations.map((loc, idx) => (
+                          <option key={`loc-${idx}`} value={loc}>{loc}</option>
+                        ))}
+                      </select>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Tab Navigation */}
+                <div className="flex space-x-2 bg-white p-2 rounded-xl shadow-sm border border-gray-100 w-full overflow-x-auto scrollbar-hide">
+                  <button
+                    onClick={() => setActiveTab('sales')}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all whitespace-nowrap ${
+                      activeTab === 'sales' ? 'bg-blue-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    📈 Sales Dashboard
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('expenses')}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all whitespace-nowrap ${
+                      activeTab === 'expenses' ? 'bg-indigo-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    🧾 Expense Report
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('cash')}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all whitespace-nowrap ${
+                      activeTab === 'cash' ? 'bg-teal-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    💼 Cash Report
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('monthly')}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all whitespace-nowrap ${
+                      activeTab === 'monthly' ? 'bg-violet-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    📅 Monthly Report
+                  </button>
+                  <button
+                    onClick={() => setActiveTab('opening')}
+                    className={`flex items-center gap-2 px-5 py-2.5 rounded-lg font-medium transition-all whitespace-nowrap ${
+                      activeTab === 'opening' ? 'bg-amber-600 text-white shadow-md' : 'text-gray-600 hover:bg-gray-50'
+                    }`}
+                  >
+                    🏦 Base Balances (1 Nov)
+                  </button>
+                </div>
+
+                {/* Dynamic Area */}
+                {loading && data.length === 0 ? (
+                  <div className="flex flex-col items-center justify-center py-20 bg-white rounded-2xl border border-gray-100 shadow-sm">
+                    <Loader2 className="w-10 h-10 text-blue-500 animate-spin mb-4" />
+                    <p className="text-gray-500 font-medium">Data process ho raha hai, kripya pratiksha karein...</p>
+                  </div>
+                ) : (
+                  <>
+                    {/* View 1: Sales */}
+                    {activeTab === 'sales' && (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 md:gap-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-all">
+                          <div className="bg-green-100 p-3 md:p-4 rounded-xl shrink-0">
+                            <IndianRupee className="w-6 h-6 md:w-8 md:h-8 text-green-600" />
+                          </div>
+                          <div className="overflow-hidden">
+                            <p className="text-sm font-medium text-gray-500 truncate">Total Cash</p>
+                            <p className="text-xl md:text-2xl font-bold text-gray-900 truncate">{formatCurrency(salesTotals.cash)}</p>
+                          </div>
+                        </div>
+
+                        <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-all">
+                          <div className="bg-blue-100 p-3 md:p-4 rounded-xl shrink-0">
+                            <CreditCard className="w-6 h-6 md:w-8 md:h-8 text-blue-600" />
+                          </div>
+                          <div className="overflow-hidden">
+                            <p className="text-sm font-medium text-gray-500 truncate">Total Card</p>
+                            <p className="text-xl md:text-2xl font-bold text-gray-900 truncate">{formatCurrency(salesTotals.card)}</p>
+                          </div>
+                        </div>
+
+                        <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-all">
+                          <div className="bg-cyan-100 p-3 md:p-4 rounded-xl shrink-0">
+                            <Smartphone className="w-6 h-6 md:w-8 md:h-8 text-cyan-600" />
+                          </div>
+                          <div className="overflow-hidden">
+                            <p className="text-sm font-medium text-gray-500 truncate">Total Paytm</p>
+                            <p className="text-xl md:text-2xl font-bold text-gray-900 truncate">{formatCurrency(salesTotals.paytm)}</p>
+                          </div>
+                        </div>
+
+                        <div className="bg-white p-5 md:p-6 rounded-2xl shadow-sm border border-gray-100 flex items-center gap-4 hover:shadow-md transition-all">
+                          <div className="bg-purple-100 p-3 md:p-4 rounded-xl shrink-0">
+                            <Smartphone className="w-6 h-6 md:w-8 md:h-8 text-purple-600" />
+                          </div>
+                          <div className="overflow-hidden">
+                            <p className="text-sm font-medium text-gray-500 truncate">Total Barcode-UPI</p>
+                            <p className="text-xl md:text-2xl font-bold text-gray-900 truncate">{formatCurrency(salesTotals.upi)}</p>
+                          </div>
+                        </div>
+
+                        <div className="bg-gradient-to-br from-gray-900 to-gray-800 p-6 md:p-8 rounded-2xl shadow-lg border border-gray-700 flex items-center gap-4 md:col-span-2 lg:col-span-4 text-white relative overflow-hidden">
+                          <div className="absolute right-0 top-0 opacity-10 pointer-events-none">
+                             <Calculator className="w-48 h-48 -mr-10 -mt-10" />
+                          </div>
+                          <div className="bg-white/10 p-4 md:p-5 rounded-2xl backdrop-blur-sm z-10 shrink-0">
+                            <Calculator className="w-8 h-8 md:w-10 md:h-10 text-white" />
+                          </div>
+                          <div className="z-10 overflow-hidden">
+                            <p className="text-sm md:text-base font-medium text-gray-300">Total Amount Paid (Sales)</p>
+                            <p className="text-3xl md:text-5xl font-bold truncate mt-1">{formatCurrency(salesTotals.totalPaid)}</p>
+                          </div>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* View 2: Expenses */}
+                    {activeTab === 'expenses' && (
+                      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="bg-indigo-600 p-6 md:p-8 rounded-2xl shadow-lg border border-indigo-700 flex items-center gap-4 text-white relative overflow-hidden mb-6">
+                          <div className="bg-white/10 p-4 md:p-5 rounded-2xl backdrop-blur-sm z-10 shrink-0">
+                            <span className="text-3xl">🧾</span>
+                          </div>
+                          <div className="z-10 overflow-hidden">
+                            <p className="text-sm md:text-base font-medium text-indigo-200">Total Expenses Logged</p>
+                            <p className="text-3xl md:text-5xl font-bold truncate mt-1">{formatCurrency(expenseData.grandTotal)}</p>
+                          </div>
+                        </div>
+
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                          <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50">
+                            <h3 className="text-lg font-bold text-gray-800">Expense Summary by Head (Click Amount for Details)</h3>
+                          </div>
+                          
+                          {expenseData.summary.length === 0 ? (
+                            <div className="p-8 text-center text-gray-500">
+                              <p>Is selected date/location mein koi expense nahi mila.</p>
+                            </div>
+                          ) : (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left border-collapse">
+                                <thead>
+                                  <tr className="bg-gray-50 border-b border-gray-100 text-gray-600 text-sm">
+                                    <th className="p-4 font-semibold">Expense Head</th>
+                                    <th className="p-4 font-semibold text-right w-1/3">Total Amount</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {expenseData.summary.map(([head, expData], index) => (
+                                    <tr key={`exp-${index}`} className="border-b border-gray-50 hover:bg-blue-50/30 transition-colors">
+                                      <td className="p-4 text-gray-800 font-medium">{head}</td>
+                                      <td className="p-4 text-right">
+                                        <button 
+                                          onClick={() => setSelectedExpenseForDetail({ head, details: expData.details, total: expData.amount })}
+                                          className="text-indigo-600 hover:text-indigo-800 font-semibold underline decoration-indigo-200 underline-offset-4"
+                                        >
+                                          {formatCurrency(expData.amount)}
+                                        </button>
+                                      </td>
+                                    </tr>
+                                  ))}
+                                  <tr className="bg-gray-50/80 font-bold text-gray-900 border-t-2 border-gray-200">
+                                    <td className="p-4">Grand Total</td>
+                                    <td className="p-4 text-right text-indigo-700 text-lg">{formatCurrency(expenseData.grandTotal)}</td>
+                                  </tr>
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* View 3: Cash Report */}
+                    {activeTab === 'cash' && (
+                      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="bg-teal-600 p-6 md:p-8 rounded-2xl shadow-lg border border-teal-700 flex items-center gap-4 text-white relative overflow-hidden mb-6">
+                          <div className="bg-white/10 p-4 md:p-5 rounded-2xl backdrop-blur-sm z-10 shrink-0">
+                            <span className="text-3xl">💼</span>
+                          </div>
+                          <div className="z-10 overflow-hidden">
+                            <p className="text-sm md:text-base font-medium text-teal-100">Final Closing Cash Balance</p>
+                            <p className="text-3xl md:text-5xl font-bold truncate mt-1">
+                              {formatCurrency(cashReportData.finalClosingBalance)}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                          <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                                <h3 className="text-lg font-bold text-gray-800">Daily Cash Flow Report</h3>
+                                <p className="text-xs text-gray-500 mt-1">Calculations strictly start from the 1 Nov 2025 baseline.</p>
+                            </div>
+                            <div className="flex flex-col gap-1 items-end">
+                              <div className="text-sm bg-amber-50 px-3 py-1.5 rounded-lg border border-amber-200 text-amber-800 font-medium">
+                                Base (1 Nov): <span>{formatCurrency(cashReportData.baseDateBalance)}</span>
+                              </div>
+                              <div className="text-sm bg-white px-3 py-1.5 rounded-lg border border-gray-200 text-gray-700 font-medium">
+                                Computed Opening for Filtered Dates: <span className="text-gray-900 font-bold">{formatCurrency(cashReportData.calculatedOpeningBalance)}</span>
+                              </div>
+                            </div>
+                          </div>
+                          
+                          {cashReportData.dailyRecords.length === 0 ? (
+                            <div className="p-8 text-center text-gray-500">
+                              <p>Selected dates ke andar koi cash flow nahi mila.</p>
+                            </div>
+                          ) : (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left border-collapse min-w-[600px]">
+                                <thead>
+                                  <tr className="bg-gray-50 border-b border-gray-100 text-gray-600 text-sm">
+                                    <th className="p-4 font-semibold whitespace-nowrap">Date</th>
+                                    <th className="p-4 font-semibold text-right">Opening Cash</th>
+                                    <th className="p-4 font-semibold text-right text-green-600">Cash In (Sales)</th>
+                                    <th className="p-4 font-semibold text-right text-red-500">Cash Out (Expense)</th>
+                                    <th className="p-4 font-semibold text-right text-teal-700">Closing Cash</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {cashReportData.dailyRecords.map((day, index) => (
+                                    <tr key={`day-${index}`} className="border-b border-gray-50 hover:bg-gray-50/50 transition-colors">
+                                      <td className="p-4 text-gray-800 font-medium whitespace-nowrap">{day.displayDate}</td>
+                                      <td className="p-4 text-right text-gray-600">{formatCurrency(day.opening)}</td>
+                                      <td className="p-4 text-right text-green-600 font-medium">+{formatCurrency(day.cashIn)}</td>
+                                      <td className="p-4 text-right text-red-500 font-medium">-{formatCurrency(day.cashOut)}</td>
+                                      <td className="p-4 text-right font-bold text-teal-700 bg-teal-50/30">
+                                        {formatCurrency(day.closing)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* View 4: Monthly Report */}
+                    {activeTab === 'monthly' && (
+                      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="bg-violet-600 p-6 md:p-8 rounded-2xl shadow-lg border border-violet-700 flex items-center gap-4 text-white relative overflow-hidden mb-6">
+                          <div className="bg-white/10 p-4 md:p-5 rounded-2xl backdrop-blur-sm z-10 shrink-0">
+                            <span className="text-3xl">📅</span>
+                          </div>
+                          <div className="z-10 overflow-hidden">
+                            <p className="text-sm md:text-base font-medium text-violet-200">Total Months Analyzed</p>
+                            <p className="text-3xl md:text-5xl font-bold truncate mt-1">
+                              {monthlyReportData.length} Months
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                          <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                            <div>
+                                <h3 className="text-lg font-bold text-gray-800">Monthly Aggregated Report</h3>
+                                <p className="text-xs text-gray-500 mt-1">Month wise summary (Date filter is ignored for this report).</p>
+                            </div>
+                          </div>
+                          
+                          {monthlyReportData.length === 0 ? (
+                            <div className="p-8 text-center text-gray-500">
+                              <p>Is location ke liye koi data nahi mila.</p>
+                            </div>
+                          ) : (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left border-collapse min-w-[800px]">
+                                <thead>
+                                  <tr className="bg-gray-50 border-b border-gray-100 text-gray-600 text-sm">
+                                    <th className="p-4 font-semibold whitespace-nowrap">Month</th>
+                                    <th className="p-4 font-semibold text-right">Cash</th>
+                                    <th className="p-4 font-semibold text-right">Card</th>
+                                    <th className="p-4 font-semibold text-right">Paytm</th>
+                                    <th className="p-4 font-semibold text-right">UPI</th>
+                                    <th className="p-4 font-semibold text-right text-green-700">Total Sales</th>
+                                    <th className="p-4 font-semibold text-right text-red-600">Total Expense</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {monthlyReportData.map((month, index) => (
+                                    <tr key={`month-${index}`} className="border-b border-gray-50 hover:bg-violet-50/30 transition-colors">
+                                      <td className="p-4 text-gray-800 font-bold whitespace-nowrap">{month.displayMonth}</td>
+                                      <td className="p-4 text-right text-gray-600">{formatCurrency(month.cash)}</td>
+                                      <td className="p-4 text-right text-gray-600">{formatCurrency(month.card)}</td>
+                                      <td className="p-4 text-right text-gray-600">{formatCurrency(month.paytm)}</td>
+                                      <td className="p-4 text-right text-gray-600">{formatCurrency(month.upi)}</td>
+                                      <td className="p-4 text-right font-bold text-green-700 bg-green-50/30">
+                                        {formatCurrency(month.totalSales)}
+                                      </td>
+                                      <td className="p-4 text-right font-bold text-red-600 bg-red-50/30">
+                                        {formatCurrency(month.totalExpense)}
+                                      </td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* View 5: Base Balances */}
+                    {activeTab === 'opening' && (
+                      <div className="animate-in fade-in slide-in-from-bottom-4 duration-500">
+                        <div className="bg-amber-600 p-6 md:p-8 rounded-2xl shadow-lg border border-amber-700 flex items-center gap-4 text-white relative overflow-hidden mb-6">
+                          <div className="bg-white/10 p-4 md:p-5 rounded-2xl backdrop-blur-sm z-10 shrink-0">
+                            <span className="text-3xl">🏦</span>
+                          </div>
+                          <div className="z-10 overflow-hidden">
+                            <p className="text-sm md:text-base font-medium text-amber-100">Total Opening Baseline (All Locations)</p>
+                            <p className="text-3xl md:text-5xl font-bold truncate mt-1">
+                              {formatCurrency(Object.values(baseBalances).reduce((a, b) => a + (Number(b) || 0), 0))}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
+                          <div className="px-6 py-5 border-b border-gray-100 bg-gray-50/50">
+                            <h3 className="text-lg font-bold text-gray-800">Fixed Opening Cash Balances (As of 1 Nov 2025)</h3>
+                            <p className="text-sm text-gray-500 mt-1">Fetched directly from the "Cash Flow" sheet tab.</p>
+                          </div>
+                          
+                          {Object.keys(baseBalances).length === 0 ? (
+                            <div className="p-8 text-center text-gray-500">
+                              <p>Cash Flow sheet mein koi base balance nahi mila.</p>
+                            </div>
+                          ) : (
+                            <div className="overflow-x-auto">
+                              <table className="w-full text-left border-collapse">
+                                <thead>
+                                  <tr className="bg-gray-50 border-b border-gray-100 text-gray-600 text-sm">
+                                    <th className="p-4 font-semibold">Saloon Location / Username</th>
+                                    <th className="p-4 font-semibold text-right">Opening Balance (1 Nov)</th>
+                                  </tr>
+                                </thead>
+                                <tbody>
+                                  {Object.entries(baseBalances).map(([loc, amt], index) => (
+                                    <tr key={`bal-${index}`} className="border-b border-gray-50 hover:bg-amber-50/30 transition-colors">
+                                      <td className="p-4 text-gray-800 font-medium">{loc}</td>
+                                      <td className="p-4 text-right text-gray-800 font-semibold">{formatCurrency(amt)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </div>
+
+              {/* Drill-Down Modal */}
+              {selectedExpenseForDetail && (
+                <div className="fixed inset-0 bg-black/60 z-50 flex items-center justify-center p-4 backdrop-blur-sm">
+                  <div className="bg-white rounded-2xl shadow-2xl w-full max-w-4xl max-h-[85vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+                    <div className="flex justify-between items-start p-6 border-b border-gray-100 bg-gray-50">
+                      <div>
+                        <h3 className="text-xl font-bold text-gray-900">{selectedExpenseForDetail.head}</h3>
+                        <p className="text-sm text-gray-500 mt-1">
+                          Total Amount: <span className="font-semibold text-indigo-600">{formatCurrency(selectedExpenseForDetail.total)}</span> 
+                          <span className="mx-2">•</span> 
+                          {selectedExpenseForDetail.details.length} Transaction(s)
+                        </p>
+                      </div>
+                      <button 
+                        onClick={() => setSelectedExpenseForDetail(null)}
+                        className="p-2 text-gray-400 hover:text-gray-700 hover:bg-gray-200 rounded-full transition-colors"
+                      >
+                        <X className="w-6 h-6" />
+                      </button>
+                    </div>
+
+                    <div className="overflow-y-auto p-0">
+                      <table className="w-full text-left border-collapse">
+                        <thead className="sticky top-0 bg-white shadow-sm ring-1 ring-black/5 z-10">
+                          <tr className="text-gray-600 text-sm bg-gray-50/90 backdrop-blur-md">
+                            <th className="p-4 font-semibold whitespace-nowrap border-b border-gray-200">Date</th>
+                            <th className="p-4 font-semibold border-b border-gray-200">Remarks / SubHead</th>
+                            <th className="p-4 font-semibold text-right whitespace-nowrap border-b border-gray-200">Exp Amt</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {selectedExpenseForDetail.details.map((item, idx) => (
+                            <tr key={`mod-${idx}`} className="border-b border-gray-50 hover:bg-blue-50/40 transition-colors">
+                              <td className="p-4 text-gray-600 text-sm whitespace-nowrap">{item.displayDate || 'Unknown Date'}</td>
+                              <td className="p-4 text-gray-800 text-sm">{item.remarks || <span className="text-gray-400 italic">No remarks</span>}</td>
+                              <td className="p-4 text-right text-gray-900 font-medium whitespace-nowrap">
+                                {formatCurrency(item.expenseAmount)}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                    
+                    <div className="p-4 border-t border-gray-100 bg-gray-50 text-right">
+                      <button 
+                        onClick={() => setSelectedExpenseForDetail(null)}
+                        className="px-6 py-2 bg-gray-200 hover:bg-gray-300 text-gray-800 font-medium rounded-lg transition-colors"
+                      >
+                        Close View
+                      </button>
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+          );
+        }
+
+        function AppWithBoundary() {
+          return (
+            <ErrorBoundary>
+              <DashboardApp />
+            </ErrorBoundary>
+          );
+        }
+
+        // --- Render the Application ---
+        const root = ReactDOM.createRoot(document.getElementById('root'));
+        root.render(<AppWithBoundary />);
+    </script>
+</body>
+</html>
